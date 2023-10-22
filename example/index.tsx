@@ -31,6 +31,12 @@ import {
   DrawerOverlay,
   DrawerContent,
   useDisclosure,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  useToast,
 } from '@chakra-ui/react';
 
 import { FaChevronRight, FaChevronLeft, FaCog } from 'react-icons/fa';
@@ -53,6 +59,8 @@ import UsePdfReader from './use-pdf-reader';
 import { PublicationList } from './PublicationList';
 import { Viewer } from './Viewer';
 import { OPDS } from './types';
+
+import axios from 'axios';
 
 const origin = window.location.origin;
 
@@ -226,7 +234,15 @@ export const Home: React.FC = () => {
     onClose: onListClose,
   } = useDisclosure();
 
-  const [endpoint, setEndpoint] = useState('');
+  const [endpoint, setEndpoint] = useState<string | null>(
+    localStorage.getItem('api_endpoint')
+  );
+  const [provider, setProvider] = useState('');
+  const [storage, setStorage] = useState('');
+
+  const [file, setFile] = useState<File | null>(null);
+
+  const toast = useToast();
 
   const fetchPublications = async () => {
     try {
@@ -235,47 +251,110 @@ export const Home: React.FC = () => {
       setPublications(data.publications);
     } catch (error) {
       console.error('Error fetching publications:', error);
+      toast({
+        title: 'Error fetching publications',
+        description: error,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
     }
   };
 
-  if (!publications)
-    return (
-      <Flex p={5}>
-        <IconButton
-          aria-label="Configuración"
-          icon={<FaCog />}
-          onClick={onConfigOpen}
-        />
+  const setAPIEndpoint = async (e) => {
+    try {
+      setEndpoint(e);
+      localStorage.setItem('api_endpoint', e);
+    } catch (error) {
+      toast({
+        title: 'Error fetching publications',
+        description: error,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
 
-        <Drawer
-          placement="right"
-          onClose={onConfigClose}
-          isOpen={isConfigOpen}
-          size="md"
-        >
-          <DrawerOverlay />
-          <DrawerContent>
-            <DrawerHeader borderBottomWidth="1px">
-              <IconButton
-                aria-label="Configuración"
-                icon={<FaChevronRight />}
-                onClick={onConfigClose}
-              />
-            </DrawerHeader>
-            <DrawerBody>
-              <Box mb={4}>
-                <Input
-                  placeholder="API endpoint"
-                  value={endpoint}
-                  onChange={(e) => setEndpoint(e.target.value)}
-                />
-              </Box>
-              <Button onClick={fetchPublications}>Set API</Button>
-            </DrawerBody>
-          </DrawerContent>
-        </Drawer>
-      </Flex>
-    );
+  const addProvider = async () => {
+    try {
+      const formData = new FormData();
+      formData.append('storage', provider);
+
+      // Post the form, just make sure to set the 'Content-Type' header
+      const res = await axios.post(endpoint + '/addstorage', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      toast({
+        title: 'Add provider.',
+        description: res.data,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+
+      console.log(res);
+    } catch (error) {
+      console.error('Error adding provider:', error);
+
+      toast({
+        title: 'Error adding provider',
+        description: error,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setFile(event.target.files[0]);
+    }
+  };
+
+  const addPublication = async () => {
+    try {
+      const formData = new FormData();
+      formData.append('storage', storage);
+      formData.append('epub', file);
+
+      // Post the form, just make sure to set the 'Content-Type' header
+      const res = await axios.post(endpoint + '/add', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      toast({
+        title: 'Add publication.',
+        description: res.data,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      console.log(res);
+    } catch (error) {
+      console.error('Error adding publications:', error);
+
+      toast({
+        title: 'Error adding publications',
+        description: error,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  console.log(endpoint);
+
+  if (endpoint) {
+    fetchPublications();
+  }
 
   return (
     <Flex p={5}>
@@ -338,14 +417,58 @@ export const Home: React.FC = () => {
             />
           </DrawerHeader>
           <DrawerBody>
-            <Box mb={4}>
-              <Input
-                placeholder="API endpoint"
-                value={endpoint}
-                onChange={(e) => setEndpoint(e.target.value)}
-              />
-            </Box>
-            <Button onClick={fetchPublications}>Set API</Button>
+            <Tabs variant="enclosed">
+              <TabList>
+                <Tab>Providers</Tab>
+                <Tab>Publications</Tab>
+                <Tab>Endpoint</Tab>
+              </TabList>
+
+              <TabPanels>
+                <TabPanel>
+                  <Box>
+                    Add content provider
+                    <Box mb={4}>
+                      <Input
+                        placeholder="Content provider"
+                        value={provider}
+                        onChange={(e) => setProvider(e.target.value)}
+                      />
+                    </Box>
+                    <Button onClick={addProvider}>Add provider</Button>
+                  </Box>
+                </TabPanel>
+                <TabPanel>
+                  <Box>
+                    Add publication
+                    <Box mb={4}>
+                      <Input
+                        placeholder="Content provider"
+                        value={storage}
+                        onChange={(e) => setStorage(e.target.value)}
+                      />
+                      <p></p>
+                      <Input
+                        type="file"
+                        placeholder="Publication"
+                        onChange={handleFileChange}
+                      />
+                    </Box>
+                  </Box>
+                  <Button onClick={addPublication}>Add publication</Button>
+                </TabPanel>
+                <TabPanel>
+                  <Box mb={4}>
+                    <Input
+                      placeholder="API endpoint"
+                      value={endpoint}
+                      onChange={(e) => setAPIEndpoint(e.target.value)}
+                    />
+                  </Box>
+                  <Button onClick={fetchPublications}>Set API</Button>
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
           </DrawerBody>
         </DrawerContent>
       </Drawer>
