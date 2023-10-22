@@ -1,6 +1,8 @@
 import 'react-app-polyfill/ie11';
 import 'regenerator-runtime/runtime';
 import * as React from 'react';
+import { useState, useEffect } from 'react';
+
 import ReactDOM from 'react-dom';
 import {
   BrowserRouter,
@@ -19,20 +21,38 @@ import {
   Text,
   Input,
   Button,
+  IconButton,
   Stack,
+  Flex,
+  Collapse,
+  Drawer,
+  DrawerBody,
+  DrawerHeader,
+  DrawerOverlay,
+  DrawerContent,
+  useDisclosure,
 } from '@chakra-ui/react';
+
+import { FaChevronRight, FaChevronLeft, FaCog } from 'react-icons/fa';
+
+//import { ChevronRightIcon, ChevronLeftIcon } from '@chakra-ui/icons';
+
 import { getTheme } from '../src/ui/theme';
 import readiumBefore from 'url:../src/HtmlReader/ReadiumCss/ReadiumCSS-before.css';
 import readiumDefault from 'url:../src/HtmlReader/ReadiumCss/ReadiumCSS-default.css';
 import readiumAfter from 'url:../src/HtmlReader/ReadiumCss/ReadiumCSS-after.css';
 import Tests from './Tests';
 import { Injectable } from '../src/Readium/Injectable';
-import useSWR, { Fetcher } from 'swr';
+
 import UseHtmlReader from './use-html-reader';
 import mobyEpub2Manifest from './static/samples/moby-epub2-exploded/manifest.json';
 import pdfSingleResourceManifest from './static/samples/pdf/single-resource-short.json';
 import { WebpubManifest } from '../src/types';
 import UsePdfReader from './use-pdf-reader';
+
+import { PublicationList } from './PublicationList';
+import { Viewer } from './Viewer';
+import { OPDS } from './types';
 
 const origin = window.location.origin;
 
@@ -40,6 +60,7 @@ const pdfProxyUrl = process.env.CORS_PROXY_URL as string | undefined;
 const pdfWorkerSrc = `${origin}/pdf-worker/pdf.worker.min.js`;
 
 const cssInjectables: Injectable[] = [
+  /*
   {
     type: 'style',
     url: readiumBefore,
@@ -52,6 +73,7 @@ const cssInjectables: Injectable[] = [
     type: 'style',
     url: readiumAfter,
   },
+  */
 ];
 
 const fontInjectable: Injectable[] = [
@@ -81,11 +103,10 @@ const App = () => {
       <BrowserRouter>
         <Switch>
           <Route exact path="/">
-            <HomePage />
+            <Home />
           </Route>
-
-          <Route path="/pdf">
-            <PdfReaders />
+          <Route exact path="/manifest">
+            <Manifest />
           </Route>
           <Route path="/html">
             <HtmlReaders />
@@ -98,74 +119,6 @@ const App = () => {
         </Switch>
       </BrowserRouter>
     </ChakraProvider>
-  );
-};
-
-const PdfReaders = () => {
-  return (
-    <>
-      <Route path={`/pdf/single-resource-short`}>
-        <SingleResourcePdf />
-      </Route>
-      <Route path={`/pdf/use-pdf-reader-hook`}>
-        <UsePdfReader
-          webpubManifestUrl="/samples/pdf/single-resource-short.json"
-          manifest={pdfSingleResourceManifest as WebpubManifest}
-          proxyUrl={pdfProxyUrl}
-          pdfWorkerSrc={`${origin}/pdf-worker/pdf.worker.min.js`}
-        />
-      </Route>
-      <Route path={`/pdf/large`}>
-        <WebReader
-          webpubManifestUrl="/samples/pdf/single-resource-long.json"
-          proxyUrl={pdfProxyUrl}
-          pdfWorkerSrc={`${origin}/pdf-worker/pdf.worker.min.js`}
-        />
-      </Route>
-      <Route path={`/pdf/collection`}>
-        <WebReader
-          webpubManifestUrl="/samples/pdf/multi-resource.json"
-          proxyUrl={pdfProxyUrl}
-          pdfWorkerSrc={`${origin}/pdf-worker/pdf.worker.min.js`}
-        />
-      </Route>
-      <Route path={`/pdf/fixed-height-embedded-collection`}>
-        <Box bg="lavenderblush" p={6} w="100vw">
-          <Heading>Fixed-height Embedded PDF</Heading>
-          <Text as="p">
-            This example shows how a web reader looks embedded within a page
-            instead of taking over the full page. It is fixed height, which
-            means it will not grow to fit content in scrolling mode.
-          </Text>
-          <WebReader
-            webpubManifestUrl={`${origin}/samples/pdf/multi-resource.json`}
-            proxyUrl={pdfProxyUrl}
-            pdfWorkerSrc={`${origin}/pdf-worker/pdf.worker.min.js`}
-            growWhenScrolling={false}
-          />
-          <Heading>The page continues...</Heading>
-          <Text as="p">Here is some more content below the reader</Text>
-        </Box>
-      </Route>
-      <Route path={`/pdf/growing-height-embedded-collection`}>
-        <Box bg="lavenderblush" p={6} w="100vw">
-          <Heading>Growing-height Embedded PDF</Heading>
-          <Text as="p">
-            This example shows how a web reader looks embedded within a page
-            instead of taking over the full page. This example lets the PDF grow
-            to fit content of the resource in scrolling mode. In paginated mode,
-            however, it will use the value of the `height` prop.
-          </Text>
-          <WebReader
-            webpubManifestUrl={`${origin}/samples/pdf/multi-resource.json`}
-            proxyUrl={pdfProxyUrl}
-            pdfWorkerSrc={`${origin}/pdf-worker/pdf.worker.min.js`}
-          />
-          <Heading>The page continues...</Heading>
-          <Text as="p">Here is some more content below the reader</Text>
-        </Box>
-      </Route>
-    </>
   );
 };
 
@@ -194,129 +147,10 @@ const getProxiedResource = (proxyUrl?: string) => async (href: string) => {
  * web reader.
  * - Returns the synthetic url
  */
-const fetchAndModifyManifest: Fetcher<string, string> = async (url) => {
-  const response = await fetch(url);
-  const manifest = await response.json();
-  const modifiedManifest = await addTocToManifest(
-    manifest,
-    getProxiedResource(pdfProxyUrl),
-    pdfWorkerSrc
-  );
-  const syntheticUrl = URL.createObjectURL(
-    new Blob([JSON.stringify(modifiedManifest)])
-  );
-  return syntheticUrl;
-};
-
-const SingleResourcePdf = () => {
-  const { data: modifiedManifestUrl, isLoading } = useSWR<string>(
-    '/samples/pdf/single-resource-short.json',
-    fetchAndModifyManifest,
-    {
-      revalidateOnFocus: false,
-    }
-  );
-
-  if (isLoading || !modifiedManifestUrl) return <div>Loading...</div>;
-
-  return (
-    <WebReader
-      webpubManifestUrl={modifiedManifestUrl}
-      proxyUrl={pdfProxyUrl}
-      pdfWorkerSrc={`${origin}/pdf-worker/pdf.worker.min.js`}
-    />
-  );
-};
 
 const HtmlReaders = () => {
   return (
     <Switch>
-      <Route path={`/html/moby-epub2`}>
-        <WebReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          webpubManifestUrl={`${origin}/samples/moby-epub2-exploded/manifest.json`}
-        />
-      </Route>
-      <Route path={`/html/moby-epub3`}>
-        <WebReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          webpubManifestUrl={`${origin}/samples/moby-epub3-exploded/manifest.json`}
-        />
-      </Route>
-      <Route path={`/html/moby-epub3-no-local-storage`}>
-        <WebReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          persistLastLocation={false}
-          persistSettings={false}
-          webpubManifestUrl={`${origin}/samples/moby-epub3-exploded/manifest.json`}
-        />
-      </Route>
-      <Route path={`/html/fixed-layout`}>
-        <WebReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          webpubManifestUrl={`${origin}/samples/fixed-layout/manifest.json`}
-        />
-      </Route>
-      <Route path={`/html/fxl-poems`}>
-        <WebReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          webpubManifestUrl={`${origin}/samples/fxl-poems/manifest.json`}
-        />
-      </Route>
-      <Route path={`/html/fixed-height-embedded-moby-epub2`}>
-        <Box bg="lavenderblush" p={6} w="100vw">
-          <Heading>Fixed-height Embedded Example</Heading>
-          <Text as="p">
-            This example shows how a web reader looks embedded within a page
-            instead of taking over the full page. It is fixed height, which
-            means it will not grow to fit content in scrolling mode.
-          </Text>
-          <WebReader
-            injectablesReflowable={htmlInjectablesReflowable}
-            webpubManifestUrl={`${origin}/samples/moby-epub2-exploded/manifest.json`}
-            growWhenScrolling={false}
-            height="70vh"
-          />
-          <Heading>The page continues...</Heading>
-          <Text as="p">Here is some more content below the reader</Text>
-        </Box>
-      </Route>
-      <Route path={`/html/growing-embedded-moby-epub2`}>
-        <Box bg="lavenderblush" p={6} w="100vw">
-          <Heading>Growing-height Embedded Example</Heading>
-          <Text as="p">
-            This example shows how a web reader looks embedded within a page and
-            with a growing-height policy. This example lets the PDF grow to fit
-            content of the resource in scrolling mode. In paginated mode,
-            however, it will use the value of the `height` prop.
-          </Text>
-          <WebReader
-            injectablesReflowable={htmlInjectablesReflowable}
-            webpubManifestUrl={`${origin}/samples/moby-epub2-exploded/manifest.json`}
-          />
-          <Heading>The page continues...</Heading>
-          <Text as="p">Here is some more content below the reader</Text>
-        </Box>
-      </Route>
-      <Route path={`/html/streamed-alice-epub`}>
-        <WebReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          webpubManifestUrl="https://alice.dita.digital/manifest.json"
-        />
-      </Route>
-      <Route path={`/html/readium-css-docs`}>
-        <WebReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          webpubManifestUrl={`${origin}/samples/ReadiumCSS-docs/manifest.json`}
-        />
-      </Route>
-      <Route path={`/html/use-html-reader-hook`}>
-        <UseHtmlReader
-          injectablesReflowable={htmlInjectablesReflowable}
-          webpubManifestUrl={`${origin}/samples/moby-epub2-exploded/manifest.json`}
-          manifest={mobyEpub2Manifest as WebpubManifest}
-        />
-      </Route>
       <Route path={`/html/url/:manifestUrl`}>
         <DynamicReader />
       </Route>
@@ -327,110 +161,18 @@ const HtmlReaders = () => {
   );
 };
 
-const HomePage = () => {
+const Manifest = () => {
   const [dynamicHref, setValue] = React.useState('');
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) =>
     setValue(event.target.value);
   return (
     <Box m={2}>
-      <Heading as="h1">NYPL Web Reader</Heading>
+      <Heading as="h1">URS Reader</Heading>
       <Heading as="h2" fontSize={2} mt={3}>
-        Generic Examples
+        Bring your own manifest:
       </Heading>
       <UnorderedList p={4}>
         <ListItem>
-          EPUB2 Based Webpubs
-          <UnorderedList>
-            <ListItem>
-              <Link to="/html/moby-epub2">Moby Dick </Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/html/use-html-reader-hook">useHtmlReader hook</Link>
-            </ListItem>
-          </UnorderedList>
-        </ListItem>
-        <ListItem>
-          EPUB3 Based Webpubs
-          <UnorderedList>
-            <ListItem>
-              <Link to="/html/moby-epub3">Moby Dick (EPUB 3)</Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/html/moby-epub3-no-local-storage">
-                Moby Dick (EPUB 3)
-              </Link>{' '}
-              - does not persist location or settings to local storage
-            </ListItem>
-            <ListItem>
-              <Link to="/html/readium-css-docs">
-                Readium CSS Documentation (as Webpub)
-              </Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/html/fixed-layout">Fixed Layout (Illustrated)</Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/html/fxl-poems">Fixed Layout (Poems)</Link>
-            </ListItem>
-          </UnorderedList>
-        </ListItem>
-        <ListItem>
-          Remote hosted WebPubs
-          <UnorderedList>
-            <ListItem>
-              <Link to="/html/streamed-alice-epub">
-                Alice's Adventures in Wonderland
-              </Link>
-              <Text as="i">
-                &nbsp;(streamed from https://alice.dita.digital)
-              </Text>
-            </ListItem>
-          </UnorderedList>
-        </ListItem>
-        <ListItem>
-          Embedded Reader
-          <UnorderedList>
-            <ListItem>
-              <Link to="/html/fixed-height-embedded-moby-epub2">
-                Fixed-height Embedded Moby Dick
-              </Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/html/growing-embedded-moby-epub2">
-                Growing-height Embedded Moby Dick
-              </Link>
-            </ListItem>
-          </UnorderedList>
-        </ListItem>
-        <ListItem>
-          PDFs
-          <UnorderedList>
-            <ListItem>
-              <Link to="/pdf/single-resource-short">Single-PDF Webpub</Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/pdf/use-pdf-reader-hook">usePdfReader hook</Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/pdf/large">Single-PDF Webpub (large file)</Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/pdf/collection">Multi-PDF Webpub</Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/pdf/fixed-height-embedded-collection">
-                Fixed-height embedded PDF
-              </Link>
-            </ListItem>
-            <ListItem>
-              <Link to="/pdf/growing-height-embedded-collection">
-                Growing-height embedded PDF
-              </Link>
-            </ListItem>
-          </UnorderedList>
-        </ListItem>
-        <ListItem>
-          Bring your own manifest:
           <Stack direction="row" alignItems="center">
             <Input
               maxW={500}
@@ -449,6 +191,165 @@ const HomePage = () => {
         </ListItem>
       </UnorderedList>
     </Box>
+  );
+};
+
+const HomePage = () => {
+  const [dynamicHref, setValue] = React.useState('');
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) =>
+    setValue(event.target.value);
+  return (
+    <Box m={2}>
+      <Heading as="h1">URS Reader</Heading>
+      <Heading as="h2" fontSize={2} mt={3}>
+        Generic Examples
+      </Heading>
+      <UnorderedList p={4}></UnorderedList>
+    </Box>
+  );
+};
+
+export const Home: React.FC = () => {
+  const [publications, setPublications] = useState<OPDS | null>(null);
+  const [selectedPublication, setSelectedPublication] = useState<
+    OPDS['publications'][0] | null
+  >(null);
+
+  const {
+    isOpen: isConfigOpen,
+    onOpen: onConfigOpen,
+    onClose: onConfigClose,
+  } = useDisclosure();
+  const {
+    isOpen: isListOpen,
+    onOpen: onListOpen,
+    onClose: onListClose,
+  } = useDisclosure();
+
+  const [endpoint, setEndpoint] = useState('');
+
+  const fetchPublications = async () => {
+    try {
+      const response = await fetch(endpoint + '/opds2/publications.json');
+      const data = await response.json();
+      setPublications(data.publications);
+    } catch (error) {
+      console.error('Error fetching publications:', error);
+    }
+  };
+
+  if (!publications)
+    return (
+      <Flex p={5}>
+        <IconButton
+          aria-label="Configuración"
+          icon={<FaCog />}
+          onClick={onConfigOpen}
+        />
+
+        <Drawer
+          placement="right"
+          onClose={onConfigClose}
+          isOpen={isConfigOpen}
+          size="md"
+        >
+          <DrawerOverlay />
+          <DrawerContent>
+            <DrawerHeader borderBottomWidth="1px">
+              <IconButton
+                aria-label="Configuración"
+                icon={<FaChevronRight />}
+                onClick={onConfigClose}
+              />
+            </DrawerHeader>
+            <DrawerBody>
+              <Box mb={4}>
+                <Input
+                  placeholder="API endpoint"
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
+                />
+              </Box>
+              <Button onClick={fetchPublications}>Set API</Button>
+            </DrawerBody>
+          </DrawerContent>
+        </Drawer>
+      </Flex>
+    );
+
+  return (
+    <Flex p={5}>
+      <IconButton
+        aria-label="Mostrar publicaciones"
+        icon={<FaChevronRight />}
+        onClick={onListOpen}
+      />
+
+      <Drawer
+        placement="left"
+        onClose={onListClose}
+        isOpen={isListOpen}
+        size="md"
+      >
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerHeader borderBottomWidth="1px">
+            <IconButton
+              aria-label="Cerrar"
+              icon={<FaChevronLeft />}
+              onClick={onListClose}
+            />
+          </DrawerHeader>
+          <DrawerBody>
+            <PublicationList
+              publications={publications}
+              onSelect={(pub) => {
+                setSelectedPublication(pub);
+                onListClose();
+              }}
+            />
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
+
+      <Box flex={1}>
+        {selectedPublication && <Viewer publication={selectedPublication} />}
+      </Box>
+
+      <IconButton
+        aria-label="Configuración"
+        icon={<FaCog />}
+        onClick={onConfigOpen}
+      />
+
+      <Drawer
+        placement="right"
+        onClose={onConfigClose}
+        isOpen={isConfigOpen}
+        size="md"
+      >
+        <DrawerOverlay />
+        <DrawerContent>
+          <DrawerHeader borderBottomWidth="1px">
+            <IconButton
+              aria-label="Configuración"
+              icon={<FaChevronRight />}
+              onClick={onConfigClose}
+            />
+          </DrawerHeader>
+          <DrawerBody>
+            <Box mb={4}>
+              <Input
+                placeholder="API endpoint"
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+              />
+            </Box>
+            <Button onClick={fetchPublications}>Set API</Button>
+          </DrawerBody>
+        </DrawerContent>
+      </Drawer>
+    </Flex>
   );
 };
 

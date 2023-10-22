@@ -35,7 +35,7 @@
     "release:alpha": "release-it --verbose --preRelease=alpha"
   },
   "peerDependencies": {
-    "@chakra-ui/react": "^1.8.7 || 2.x",
+    "@chakra-ui/react": "^1.8.9",
     "@emotion/react": "^11.8.2",
     "@emotion/styled": "^11.8.1",
     "react": "^16.8.0 || 17.x || 18.x",
@@ -128,7 +128,7 @@
     "debounce": "^1.2.1",
     "framer-motion": "^4.1.6",
     "node-fetch": "^2.6.1",
-    "react-icons": "^4.3.1",
+    "react-icons": "^4.11.0",
     "react-intersection-observer": "^8.32.2",
     "react-pdf": "^5.3.2",
     "react-resize-observer": "^1.1.1"
