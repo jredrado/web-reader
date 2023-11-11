@@ -162,8 +162,11 @@ const HtmlReaders = () => {
       <Route path={`/html/url/:manifestUrl`}>
         <DynamicReader />
       </Route>
+      <Route path={`/html/hex/:manifestUrl`}>
+        <DynamicReaderHEX />
+      </Route>
       <Route path={`/html/test`}>
-        <Tests />
+        <Manifest />
       </Route>
     </Switch>
   );
@@ -218,6 +221,32 @@ const HomePage = () => {
 };
 
 export const Home: React.FC = () => {
+  const [endpoint, setEndpoint] = useState<string | null>(
+    localStorage.getItem('api_endpoint')
+  );
+
+  const initPublications = async () => {
+    try {
+      console.log('Init publications: ', endpoint);
+
+      if (endpoint) {
+        const response = await fetch(endpoint + '/opds2/publications.json');
+        const data = await response.json();
+        //setPublications(data.publications);
+        return data.publications;
+      }
+    } catch (error) {
+      console.error('Error fetching publications:', error);
+      toast({
+        title: 'Error fetching publications',
+        description: error,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   const [publications, setPublications] = useState<OPDS | null>(null);
   const [selectedPublication, setSelectedPublication] = useState<
     OPDS['publications'][0] | null
@@ -234,9 +263,6 @@ export const Home: React.FC = () => {
     onClose: onListClose,
   } = useDisclosure();
 
-  const [endpoint, setEndpoint] = useState<string | null>(
-    localStorage.getItem('api_endpoint')
-  );
   const [provider, setProvider] = useState('');
   const [storage, setStorage] = useState('');
 
@@ -244,11 +270,15 @@ export const Home: React.FC = () => {
 
   const toast = useToast();
 
-  const fetchPublications = async () => {
+  const fetchAndSetPublications = async () => {
     try {
-      const response = await fetch(endpoint + '/opds2/publications.json');
-      const data = await response.json();
-      setPublications(data.publications);
+      if (endpoint) {
+        console.log('Fetch publications from ', endpoint);
+
+        const response = await fetch(endpoint + '/opds2/publications.json');
+        const data = await response.json();
+        setPublications(data.publications);
+      }
     } catch (error) {
       console.error('Error fetching publications:', error);
       toast({
@@ -349,12 +379,6 @@ export const Home: React.FC = () => {
       });
     }
   };
-
-  console.log(endpoint);
-
-  if (endpoint) {
-    fetchPublications();
-  }
 
   return (
     <Flex p={5}>
@@ -465,7 +489,7 @@ export const Home: React.FC = () => {
                       onChange={(e) => setAPIEndpoint(e.target.value)}
                     />
                   </Box>
-                  <Button onClick={fetchPublications}>Set API</Button>
+                  <Button onClick={fetchAndSetPublications}>Set API</Button>
                 </TabPanel>
               </TabPanels>
             </Tabs>
@@ -479,6 +503,25 @@ export const Home: React.FC = () => {
 const DynamicReader: React.FC = () => {
   const { manifestUrl } = useParams<{ manifestUrl: string }>();
   const decoded = decodeURIComponent(manifestUrl);
+  return (
+    <WebReader
+      injectablesReflowable={htmlInjectablesReflowable}
+      webpubManifestUrl={decoded}
+    />
+  );
+};
+
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i !== bytes.length; i++) {
+    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return bytes;
+}
+
+const DynamicReaderHEX: React.FC = () => {
+  const { manifestUrl } = useParams<{ manifestUrl: string }>();
+  const decoded = new TextDecoder().decode(hexToBytes(manifestUrl));
   return (
     <WebReader
       injectablesReflowable={htmlInjectablesReflowable}
