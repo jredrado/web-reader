@@ -15,6 +15,7 @@
     "example:build": "parcel build",
     "example:nocache": "parcel --no-cache",
     "example": "parcel",
+    "reader": "parcel",
     "start": "tsup -w",
     "build": "tsup",
     "test": "jest --watch",

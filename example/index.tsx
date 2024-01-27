@@ -443,15 +443,15 @@ export const Home: React.FC = () => {
           <DrawerBody>
             <Tabs variant="enclosed">
               <TabList>
-                <Tab>Providers</Tab>
-                <Tab>Publications</Tab>
+                <Tab>Content providers</Tab>
+                <Tab>Register & Publish</Tab>
                 <Tab>Endpoint</Tab>
               </TabList>
 
               <TabPanels>
                 <TabPanel>
                   <Box>
-                    Add content provider
+                    Add content provider to fetch publications
                     <Box mb={4}>
                       <Input
                         placeholder="Content provider"
@@ -464,7 +464,8 @@ export const Home: React.FC = () => {
                 </TabPanel>
                 <TabPanel>
                   <Box>
-                    Add publication
+                    Register and publish to content provider
+                    <p></p>
                     <Box mb={4}>
                       <Input
                         placeholder="Content provider"
@@ -479,7 +480,9 @@ export const Home: React.FC = () => {
                       />
                     </Box>
                   </Box>
-                  <Button onClick={addPublication}>Add publication</Button>
+                  <Button onClick={addPublication}>
+                    Register and publish in content provider
+                  </Button>
                 </TabPanel>
                 <TabPanel>
                   <Box mb={4}>
