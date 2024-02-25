@@ -222,7 +222,8 @@ const HomePage = () => {
 
 export const Home: React.FC = () => {
   const [endpoint, setEndpoint] = useState<string | null>(
-    localStorage.getItem('api_endpoint')
+    //localStorage.getItem('api_endpoint')
+    'https://authreadiumx.run.place'
   );
 
   const initPublications = async () => {
@@ -290,6 +291,10 @@ export const Home: React.FC = () => {
       });
     }
   };
+
+  useEffect(() => {
+    initPublications().then((data) => setPublications(data));
+  }, []);
 
   const setAPIEndpoint = async (e) => {
     try {
